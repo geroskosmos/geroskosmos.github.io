@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerasimos Kosmatos Weather Forecast</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-geosearch@3.2.0/dist/geosearch.css" />
+    <style>
+        #map { height: 300px; width: 100%; }
+        #weather { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Weather Forecast</h1>
+    <p>by Gerasimos Kosmatos</p>
+    <div id="map"></div>
+    <div>
+        <label for="timeSelect">Select Time: </label>
+        <select id="timeSelect"></select>
+        <button onclick="fetchWeatherData()">Get Weather</button>
+    </div>
+    <div id="weather"></div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-geosearch@3.2.0/dist/bundle.min.js"></script>
+    <script>
+        // Initialize the map
+        var map = L.map('map').setView([37.969, 23.74], 12);
+
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        var marker;
+        var selectedLat, selectedLon;
+        var weatherData = {};
+
+        // Initialize the geosearch control
+        const provider = new window.GeoSearch.OpenStreetMapProvider();
+        const searchControl = new window.GeoSearch.GeoSearchControl({
+            provider: provider,
+            style: 'bar',
+            showMarker: true,
+            showPopup: false,
+            marker: {
+                icon: new L.Icon.Default(),
+                draggable: false,
+            },
+            updateMap: true,
+        });
+        map.addControl(searchControl);
+
+        // Handle the search result selection
+        map.on('geosearch/showlocation', function(result) {
+            selectedLat = result.location.y;
+            selectedLon = result.location.x;
+
+            // Update or add marker
+            if (typeof marker !== 'undefined') {
+                marker.setLatLng([selectedLat, selectedLon]);
+            } else {
+                marker = L.marker([selectedLat, selectedLon]).addTo(map);
+            }
+
+            fetchWeatherDataAndUpdateTimeSelect();
+        });
+
+        // Function to convert wind speed from km/h to Beaufort scale
+        function windSpeedToBeaufort(speed) {
+            if (speed < 1) return 0;
+            if (speed < 5) return 1;
+            if (speed < 11) return 2;
+            if (speed < 19) return 3;
+            if (speed < 28) return 4;
+            if (speed < 38) return 5;
+            if (speed < 49) return 6;
+            if (speed < 61) return 7;
+            if (speed < 74) return 8;
+            if (speed < 88) return 9;
+            if (speed < 102) return 10;
+            if (speed < 117) return 11;
+            return 12;
+        }
+
+        // Function to fetch and display weather data
+        function fetchWeatherData() {
+            var timeSelect = document.getElementById('timeSelect');
+            var selectedTimeIndex = timeSelect.selectedIndex;
+            var selectedTime = timeSelect.value;
+
+            if (typeof selectedLat === 'undefined' || typeof selectedLon === 'undefined') {
+                alert("Please select a location on the map first.");
+                return;
+            }
+
+            var hourIndex = weatherData.hourly.time.indexOf(selectedTime);
+
+            if (hourIndex === -1) {
+                alert("Selected time is not available in the weather data.");
+                return;
+            }
+
+            var windSpeed = weatherData.hourly.windspeed_10m[hourIndex];
+            var windGusts = weatherData.hourly.wind_gusts_10m[hourIndex];
+            var beaufortScale = windSpeedToBeaufort(windSpeed);
+            var beaufortScaleGusts = windSpeedToBeaufort(windGusts);
+
+            var weatherDiv = document.getElementById('weather');
+            weatherDiv.innerHTML = `<h2> ${selectedTime}</h2>
+                                    <h5><strong>Latitude:</strong> ${selectedLat} , <strong>Longitude:</strong> ${selectedLon}</h5>                                                                                                                    
+                                    <h3><strong>Temperature:</strong> ${weatherData.hourly.temperature_2m[hourIndex]}°C</h3>                                    
+                                    <h3><strong>Wind Speed:</strong> ${beaufortScale} Beaufort (${windSpeed} km/h)</h3>
+                                    <h3><strong>Wind Gusts:</strong> ${beaufortScaleGusts} Beaufort (${windGusts} km/h)</h3>
+                                    <h3><strong>Wind Direction:</strong> ${weatherData.hourly.winddirection_10m[hourIndex]}°</h3>
+                                    <h3><strong>Precipitation:</strong> ${weatherData.hourly.precipitation[hourIndex]} mm</h3>
+                                    <h3><strong>Humidity:</strong> ${weatherData.hourly.relative_humidity_2m[hourIndex]}%</h3>`;
+        }
+
+        // Function to update the time selection dropdown
+        function updateTimeSelect(data) {
+            var timeSelect = document.getElementById('timeSelect');
+            timeSelect.innerHTML = '';
+            if (data.hourly && data.hourly.time.length > 0) {
+                data.hourly.time.forEach((time, index) => {
+                    var option = document.createElement('option');
+                    option.value = time;
+                    option.textContent = time;
+                    timeSelect.appendChild(option);
+                });
+            }
+        }
+
+        // Function to fetch weather data and update the time selection dropdown
+        function fetchWeatherDataAndUpdateTimeSelect() {
+            if (typeof selectedLat === 'undefined' || typeof selectedLon === 'undefined') {
+                alert("Please select a location on the map first.");
+                return;
+            }
+
+            fetch(`https://api.open-meteo.com/v1/forecast?latitude=${selectedLat}&longitude=${selectedLon}&hourly=temperature_2m,relative_humidity_2m,windspeed_10m,wind_gusts_10m,winddirection_10m,precipitation`)
+                .then(response => response.json())
+                .then(data => {
+                    weatherData = data;
+                    updateTimeSelect(data);
+                })
+                .catch(error => {
+                    console.error('Error fetching the weather data:', error);
+                    var weatherDiv = document.getElementById('weather');
+                    weatherDiv.innerHTML = `<h2>Weather Information</h2>
+                                            <p>Error fetching weather data.</p>`;
+                });
+        }
+
+        // Add a marker on click and fetch weather data
+        map.on('click', function(e) {
+            selectedLat = e.latlng.lat;
+            selectedLon = e.latlng.lng;
+
+            // Center the map on clicked location
+            map.setView(e.latlng, 10);
+
+            // Update or add marker
+            if (typeof marker !== 'undefined') {
+                marker.setLatLng(e.latlng);
+            } else {
+                marker = L.marker(e.latlng).addTo(map);
+            }
+
+            fetchWeatherDataAndUpdateTimeSelect();
+        });
+    </script>
+</body>
+</html>
