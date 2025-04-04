@@ -139,7 +139,7 @@
                 return;
             }
 
-            fetch(`https://api.open-meteo.com/v1/forecast?latitude=${selectedLat}&longitude=${selectedLon}&hourly=temperature_2m,relative_humidity_2m,windspeed_10m,wind_gusts_10m,winddirection_10m,precipitation`)
+            fetch(`https://api.open-meteo.com/v1/forecast?latitude=${selectedLat}&longitude=${selectedLon}&hourly=temperature_2m,relative_humidity_2m,windspeed_10m,wind_gusts_10m,winddirection_10m,precipitation&forecast_days=16`)
                 .then(response => response.json())
                 .then(data => {
                     weatherData = data;
